@@ -1,15 +1,34 @@
+"""
+Craig Fouts (craig.fouts@uu.igp.se)
+"""
+
 import imageio
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from IPython.display import clear_output, display, Video
 
-def get_particles(path, threshold=.1, n_channels=0):
+def transport_loss(x, y, projection_dim=128, scale=1.):
+    projection = torch.normal(0., 1., (x.shape[-1], projection_dim))
+    projection /= projection.square().sum(0, keepdim=True).sqrt()
+    particles = (x@projection).T.sort()[0]
+    target = (y@projection).T.sort()[0]
+    mask = (torch.linspace(0, target.shape[-1] - 1, x.shape[0]) + .5).long()
+    target = target[:, mask]
+    loss = scale*(particles - target).square().sum()/projection_dim
+
+    return loss
+
+def get_particles(path, threshold=.5, n_channels=0, randomize=False):
     image = torch.tensor(plt.imread(path))
     points = torch.stack(torch.where(image[..., -1] >= threshold)[::-1])
     colors = image[points[1], points[0], :3]
     points[1] = points[1].max() - points[1]
-    particles = torch.cat([points.T, colors, torch.ones((points.shape[-1], n_channels))], dim=-1)
+
+    if randomize:
+        particles = torch.cat([points.T, colors, torch.rand(points.shape[-1], n_channels)], dim=-1)
+    else:
+        particles = torch.cat([points.T, colors, torch.zeros(points.shape[-1], n_channels)], dim=-1)
 
     return particles
 
@@ -27,6 +46,20 @@ def show_particles(*particles, size=1, limits=(0, 125, 0, 125), clear=False, sho
     
     if show:
         plt.show()
+
+def show_progress(particles, log, particles_title=None, log_title=None, particles_size=1, particles_range=(-5, 135, -5, 135), clear=True):
+    if clear:
+        clear_output(True)
+
+    _, (particles_plot, log_plot) = plt.subplots(1, 2, figsize=(10, 5))
+    particles_plot.axis('off')
+    particles_plot.axis(particles_range)
+    colors = torch.clip(particles[:, 2:5], 0, 1) if particles.shape[-1] > 2 else torch.zeros(particles.shape[0])
+    particles_plot.set_title(particles_title)
+    particles_plot.scatter(*particles[:, :2].T, particles_size, colors)
+    log_plot.set_title(log_title)
+    log_plot.plot(torch.arange(len(log)), log)
+    plt.show()
 
 def grab_plot(close=True):
     """Converts the current Matplotlib canvas into an RGB image array.
@@ -60,10 +93,10 @@ class VideoWriter:
     ----------
     size : int, default=500
         Video canvas width and height.
-    frame_rage : float, default=30.0
+    rate : float, default=30.0
         Video frame rate.
-    file_name : str, default='_autoplay.mp4'
-        Video file name.
+    path : str, default='_autoplay.mp4'
+        Video file path.
 
     Attributes
     ----------
@@ -79,10 +112,10 @@ class VideoWriter:
     >>>         video.write(grab_plot())
     """
 
-    def __init__(self, size=500, frame_rate=30., file_name='_autoplay.mp4'):
+    def __init__(self, size=500, rate=30., path='../videos/_autoplay.mp4'):
         self.size = size
-        self.frame_rate = frame_rate
-        self.file_name = file_name
+        self.rate = rate
+        self.path = path
 
         self.frames = []
 
@@ -92,7 +125,7 @@ class VideoWriter:
     def __exit__(self, *_):
         self.save()
 
-        if self.file_name == '_autoplay.mp4':
+        if self.path[-13:] == '_autoplay.mp4':
             self.show()
 
     def write(self, image):
@@ -122,12 +155,12 @@ class VideoWriter:
         None
         """
 
-        with imageio.imopen(self.file_name, 'w', plugin='pyav') as out:
-            out.init_video_stream('vp9', fps=self.frame_rate)
+        with imageio.imopen(self.path, 'w', plugin='pyav') as out:
+            out.init_video_stream('vp9', fps=self.rate)
 
             for f in self.frames:
                 out.write_frame(f)
 
     def show(self):
-        video = Video(self.file_name, width=self.size, height=self.size)
+        video = Video(self.path, width=self.size, height=self.size)
         display(video)
