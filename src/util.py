@@ -8,14 +8,13 @@ import numpy as np
 import torch
 from IPython.display import clear_output, display, Video
 
-def transport_loss(x, y, projection_dim=128, scale=1.):
+def transport_loss(x, target, projection_dim=128, scale=1.):
     projection = torch.normal(0., 1., (x.shape[-1], projection_dim))
     projection /= projection.square().sum(0, keepdim=True).sqrt()
-    particles = (x@projection).T.sort()[0]
-    target = (y@projection).T.sort()[0]
+    y = (x@projection).T.sort()[0]
+    target = (target@projection).T.sort()[0]
     mask = (torch.linspace(0, target.shape[-1] - 1, x.shape[0]) + .5).long()
-    target = target[:, mask]
-    loss = scale*(particles - target).square().sum()/projection_dim
+    loss = scale*(y - target[:, mask]).square().sum()/projection_dim
 
     return loss
 
@@ -32,14 +31,14 @@ def get_particles(path, threshold=.5, n_channels=0, randomize=False):
 
     return particles
 
-def show_particles(*particles, size=1, limits=(0, 125, 0, 125), clear=False, show=True):
+def show_particles(*x, size=1, limits=(0, 125, 0, 125), clear=False, show=True):
     plt.axis('equal')
     plt.axis('off')
     plt.axis(limits)
 
-    for p in particles:
-        colors = torch.clip(p[:, 2:5], 0, 1) if p.shape[-1] > 2 else None
-        plt.scatter(*p[:, :2].T, size, colors)
+    for particle in x:
+        colors = torch.clip(particle[:, 2:5], 0, 1) if particle.shape[-1] > 2 else None
+        plt.scatter(*particle[:, :2].T, size, colors)
 
     if clear:
         clear_output()
@@ -47,16 +46,16 @@ def show_particles(*particles, size=1, limits=(0, 125, 0, 125), clear=False, sho
     if show:
         plt.show()
 
-def show_progress(particles, log, particles_title=None, log_title=None, particles_size=1, particles_range=(-5, 135, -5, 135), clear=True):
+def show_progress(x, log, x_title=None, log_title=None, x_size=1, x_range=(-5, 135, -5, 135), clear=True):
     if clear:
         clear_output(True)
 
-    _, (particles_plot, log_plot) = plt.subplots(1, 2, figsize=(10, 5))
-    particles_plot.axis('off')
-    particles_plot.axis(particles_range)
-    colors = torch.clip(particles[:, 2:5], 0, 1) if particles.shape[-1] > 2 else torch.zeros(particles.shape[0])
-    particles_plot.set_title(particles_title)
-    particles_plot.scatter(*particles[:, :2].T, particles_size, colors)
+    _, (x_plot, log_plot) = plt.subplots(1, 2, figsize=(10, 5))
+    x_plot.axis('off')
+    x_plot.axis(x_range)
+    colors = torch.clip(x[:, 2:5], 0, 1) if x.shape[-1] > 2 else torch.zeros(x.shape[0])
+    x_plot.set_title(x_title)
+    x_plot.scatter(*x[:, :2].T, x_size, colors)
     log_plot.set_title(log_title)
     log_plot.plot(torch.arange(len(log)), log)
     plt.show()
