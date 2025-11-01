@@ -59,7 +59,6 @@ stack-data==0.6.3
 sympy==1.14.0
 torch==2.7.0
 torch-geometric==2.6.1
-torch_cluster @ git+https://github.com/rusty1s/pytorch_cluster.git@150dd5ca46973add430d1559fc9f3684f4f24374
 tornado==6.4.2
 tqdm==4.67.1
 traitlets==5.14.3
